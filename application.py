@@ -1,6 +1,7 @@
 # 🛠️ Commande d'installation de l'environnement :
 # conda create -n projet_ds python=3.10 pandas numpy matplotlib seaborn streamlit plotly -y
-
+# Lien vers l'application : https://sae-601-gygygq8ndyfu3c5eh6rabn.streamlit.app/
+# Lien vers le github : https://github.com/Gbinamm/SAE-601
 ### 1. Importation des librairies et chargement des données
 import os
 import pandas as pd
@@ -27,7 +28,23 @@ if not df.empty:
     df['experience_level'] = df['experience_level'].replace({'EN': 'Débutant', 'MI': 'Intermédiaire', 'SE': 'Senior', 'EX': 'Expert'})
     df['company_size'] = df['company_size'].replace({'S': 'Petite', 'M': 'Moyenne', 'L': 'Grande'})
     df['employment_type'] = df['employment_type'].replace({'FT': 'Temps plein', 'PT': 'Temps partiel', 'CT': 'Contrat', 'FL': 'Freelance'})
-    df['remote_ratio'] = df['remote_ratio'].replace({0: 'Présentiel', 50: 'Hybride', 100: 'Télétravail'})
+    df['remote_ratio_label'] = df['remote_ratio'].replace({0: 'Présentiel', 50: 'Hybride', 100: 'Télétravail'})
+
+    # Ajout de filtres dynamiques 
+    st.sidebar.header("⚙️ Filtres de recherche")
+    min_sal, max_sal = int(df['salary_in_usd'].min()), int(df['salary_in_usd'].max())
+    salary_range = st.sidebar.slider("Sélectionnez une plage de salaire (USD)", min_sal, max_sal, (min_sal, max_sal))
+    
+    # Filtrage avancé des données 
+    exp_filter = st.sidebar.multiselect("Sélectionnez le niveau d'expérience", options=df['experience_level'].unique())
+    size_filter = st.sidebar.multiselect("Sélectionnez la taille d'entreprise", options=df['company_size'].unique())
+
+    # Application des filtres sur le dataframe global
+    df_filtered = df[(df['salary_in_usd'] >= salary_range[0]) & (df['salary_in_usd'] <= salary_range[1])]
+    if exp_filter:
+        df_filtered = df_filtered[df_filtered['experience_level'].isin(exp_filter)]
+    if size_filter:
+        df_filtered = df_filtered[df_filtered['company_size'].isin(size_filter)]
 
 # Indicateurs de synthèse 
 if not df.empty:
@@ -35,11 +52,11 @@ if not df.empty:
     col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
     
     with col_kpi1:
-        st.metric("💰 Salaire Moyen", f"{round(df['salary_in_usd'].mean(), 0)} $")
+        st.metric("💰 Salaire Moyen", f"{round(df_filtered['salary_in_usd'].mean(), 0) if not df_filtered.empty else 0} $")
     with col_kpi2:
         # Calcul issu du notebook
-        moy_rem = df[df['remote_ratio'] == 'Télétravail']['salary_in_usd'].mean()
-        st.metric("🏠 Moyenne Télétravail", f"{round(moy_rem, 0)} $")
+        moy_rem = df_filtered[df_filtered['remote_ratio'] == 100]['salary_in_usd'].mean()
+        st.metric("🏠 Moyenne Télétravail", f"{round(moy_rem, 0) if not np.isnan(moy_rem) else 0} $")
     with col_kpi3:
         # Vérification des valeurs nulles
         null_count = df.isnull().sum().sum()
@@ -53,15 +70,15 @@ st.markdown("Explorez les tendances des salaires mondiaux à travers différente
 
 if not df.empty:
     if st.checkbox("💾 Afficher un aperçu des données"):
-        st.write(df.head(10))
+        st.write(df_filtered.head(10))
 
     st.subheader("📌 Statistiques générales")
-    st.write(df.describe())
+    st.write(df_filtered.describe())
 
     ### 3. Distribution des salaires en France par rôle et niveau d'expérience 
     st.subheader("📈 Distribution des salaires en France")
     # Filtrage pour la France 
-    df_fr = df[df['employee_residence'] == 'FR']
+    df_fr = df_filtered[df_filtered['employee_residence'] == 'FR']
     
     if not df_fr.empty:
         fig_box = px.box(df_fr, x='experience_level', y='salary_in_usd', color='experience_level',
@@ -79,7 +96,7 @@ if not df.empty:
                              ['experience_level', 'employment_type', 'job_title', 'company_location'])
     
     # Calcul de la moyenne
-    df_grouped = df.groupby(categorie)['salary_in_usd'].mean().sort_values(ascending=False).reset_index()
+    df_grouped = df_filtered.groupby(categorie)['salary_in_usd'].mean().sort_values(ascending=False).reset_index()
     
     fig_bar = px.bar(df_grouped, x=categorie, y='salary_in_usd', 
                      title=f"Salaire moyen par {categorie}",
@@ -103,19 +120,21 @@ if not df.empty:
     ### 6. Analyse des variations de salaire (Top 10 postes)
     st.subheader("📅 Évolution des salaires pour les 10 postes les plus fréquents")
     top_10_roles = df['job_title'].value_counts().nlargest(10).index
-    df_top10 = df[df['job_title'].isin(top_10_roles)]
+    df_top10 = df_filtered[df_filtered['job_title'].isin(top_10_roles)]
     
-    df_evolution = df_top10.groupby(['work_year', 'job_title'])['salary_in_usd'].mean().reset_index()
-    
-    fig_line = px.line(df_evolution, x='work_year', y='salary_in_usd', color='job_title',
-                       title="Évolution annuelle du salaire moyen par métier",
-                       labels={'work_year': 'Année', 'salary_in_usd': 'Salaire moyen (USD)', 'job_title': 'Métier'})
-    st.plotly_chart(fig_line)
-    st.markdown("**Interprétation :** On observe globalement une tendance à la hausse, confirmant que la demande en Data Science reste forte d'année en année pour les rôles comme Data Scientist ou Data Engineer.")
+    if not df_top10.empty:
+        df_evolution = df_top10.groupby(['work_year', 'job_title'])['salary_in_usd'].mean().reset_index()
+        fig_line = px.line(df_evolution, x='work_year', y='salary_in_usd', color='job_title',
+                           title="Évolution annuelle du salaire moyen par métier",
+                           labels={'work_year': 'Année', 'salary_in_usd': 'Salaire moyen (USD)', 'job_title': 'Métier'})
+        st.plotly_chart(fig_line)
+        st.markdown("**Interprétation :** On observe globalement une tendance à la hausse, confirmant que la demande en Data Science reste forte d'année en année pour les rôles comme Data Scientist ou Data Engineer.")
+    else:
+        st.warning("Pas de données pour afficher l'évolution des postes.")
 
     ### 7. Salaire médian par expérience et taille d'entreprise 
     st.subheader("🏢 Salaire médian par expérience et taille d'entreprise")
-    df_median = df.groupby(['experience_level', 'company_size'])['salary_in_usd'].median().reset_index()
+    df_median = df_filtered.groupby(['experience_level', 'company_size'])['salary_in_usd'].median().reset_index()
     
     fig_median = px.bar(df_median, x='experience_level', y='salary_in_usd', color='company_size',
                         barmode='group', title="Impact de la taille d'entreprise sur le salaire médian",
@@ -124,39 +143,21 @@ if not df.empty:
     st.markdown("**Interprétation :** En général, les grandes entreprises (L) offrent des salaires plus élevés pour les seniors, mais les PME (S/M) peuvent être compétitives sur les profils juniors pour attirer les talents.")
 
     ### 8. Ajout de filtres dynamiques 
-    st.sidebar.header("⚙️ Filtres de recherche")
-    min_sal, max_sal = int(df['salary_in_usd'].min()), int(df['salary_in_usd'].max())
-    salary_range = st.sidebar.slider("Sélectionnez une plage de salaire (USD)", min_sal, max_sal, (min_sal, max_sal))
-    
-    df_filtered = df[(df['salary_in_usd'] >= salary_range[0]) & (df['salary_in_usd'] <= salary_range[1])]
+    # (Le code a été déplacé au début pour affecter tous les graphiques)
 
     ### 9. Impact du télétravail sur le salaire selon le pays 
     st.subheader("🏠 Impact du télétravail sur le salaire")
     # On compare les salaires en fonction des ratios de télétravail
-    fig_remote = px.strip(df_filtered, x='remote_ratio', y='salary_in_usd', color='experience_level',
-                          title="Répartition des salaires selon le taux de télétravail",
-                          labels={'remote_ratio': 'Mode de travail', 'salary_in_usd': 'Salaire (USD)', 'experience_level': "Niveau d'expérience"})
+    fig_remote = px.strip(df_filtered, x='remote_ratio_label', y='salary_in_usd', color='experience_level',
+                          title="Répartition des salaires selon le mode de travail",
+                          labels={'remote_ratio_label': 'Mode de travail', 'salary_in_usd': 'Salaire (USD)', 'experience_level': "Niveau d'expérience"})
     st.plotly_chart(fig_remote)
     st.markdown("**Interprétation :** Le télétravail total (100) n'entraîne pas forcément une baisse de salaire, au contraire, il permet souvent d'accéder à des marchés internationaux mieux rémunérés.")
 
     ### 10. Filtrage avancé des données 
     st.subheader("🧪 Filtrage ciblé")
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        exp_filter = st.multiselect("Sélectionnez le niveau d'expérience", options=df['experience_level'].unique())
-    with col2:
-        size_filter = st.multiselect("Sélectionnez la taille d'entreprise", options=df['company_size'].unique())
-    
-   
-    final_df = df_filtered.copy()
-    if exp_filter:
-        final_df = final_df[final_df['experience_level'].isin(exp_filter)]
-    if size_filter:
-        final_df = final_df[final_df['company_size'].isin(size_filter)]
-        
-    st.write(f"Nombre de résultats trouvés : {len(final_df)}")
-    st.dataframe(final_df)
+    st.write(f"Nombre de résultats trouvés : {len(df_filtered)}")
+    st.dataframe(df_filtered)
 
 else:
     st.info("Veuillez charger le fichier de données pour commencer l'analyse.")
@@ -164,17 +165,19 @@ else:
 #  Analyse du Top 5 Pays 
 st.subheader("🥇 Top 5 des pays avec les meilleurs salaires")
 # Agrégation par pays
-top_5_pays = df.groupby('company_location')['salary_in_usd'].mean().sort_values(ascending=False).head(5).reset_index()
-fig_top5 = px.bar(top_5_pays, x='company_location', y='salary_in_usd', 
-                  color='salary_in_usd', text_auto='.3s',
-                  title="Top 5 des pays (Moyenne en USD)",
-                  labels={'salary_in_usd': 'Salaire moyen (USD)', 'company_location': 'Localisation'})
-st.plotly_chart(fig_top5)
+top_5_pays = df_filtered.groupby('company_location')['salary_in_usd'].mean().sort_values(ascending=False).head(5).reset_index()
+if not top_5_pays.empty:
+    fig_top5 = px.bar(top_5_pays, x='company_location', y='salary_in_usd', 
+                      color='salary_in_usd', text_auto='.3s',
+                      title="Top 5 des pays (Moyenne en USD)",
+                      labels={'salary_in_usd': 'Salaire moyen (USD)', 'company_location': 'Localisation'})
+    st.plotly_chart(fig_top5)
 
 #  Tableau Croisé Expérience vs Télétravail 
 st.subheader("📑 Synthèse : Salaire par Expérience et Mode de Travail")
 # Création de la table pivot identique au notebook
-pivot = df.pivot_table(values='salary_in_usd', index='experience_level', 
-                        columns='remote_ratio', aggfunc='mean').round(0)
-st.table(pivot)
+if not df_filtered.empty:
+    pivot = df_filtered.pivot_table(values='salary_in_usd', index='experience_level', 
+                            columns='remote_ratio_label', aggfunc='mean').round(0)
+    st.table(pivot)
 st.markdown("**Analyse :** Ce tableau montre que les cadres (Expert) en télétravail total ont les moyennes les plus hautes.")
