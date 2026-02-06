@@ -10,7 +10,7 @@ import seaborn as sns
 import streamlit as st
 import plotly.express as px
 
-st.set_page_config(page_title="Data Science Salary Dashboard", layout="wide")
+st.set_page_config(page_title="Tableau de bord sur les salaires en science des données", layout="wide")
 
 # Chargement des données 
 @st.cache_data
@@ -18,10 +18,28 @@ def load_data():
     if os.path.exists("ds_salaries.csv"):
         return pd.read_csv("ds_salaries.csv")
     else:
-        st.error("⚠️ Fichier 'ds_salaries.csv' non trouvé. Assurez-vous qu'il est dans le même dossier.")
+        st.error("Fichier 'ds_salaries.csv' non trouvé. Assurez-vous qu'il est dans le même dossier.")
         return pd.DataFrame()
 
 df = load_data()
+
+# Indicateurs de synthèse 
+if not df.empty:
+    st.markdown("### 💰 Chiffres Clés")
+    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
+    
+    with col_kpi1:
+        st.metric("💰 Salaire Moyen", f"{round(df['salary_in_usd'].mean(), 0)} $")
+    with col_kpi2:
+        # Calcul issu du notebook
+        moy_rem = df[df['remote_ratio'] == 100]['salary_in_usd'].mean()
+        st.metric("🏠 Moyenne Télétravail", f"{round(moy_rem, 0)} $")
+    with col_kpi3:
+        # Vérification des valeurs nulles
+        null_count = df.isnull().sum().sum()
+        st.metric("🔎 Données Manquantes", "Aucune" if null_count == 0 else f"{null_count}")
+    st.divider()
+
 
 ### 2. Exploration visuelle des données 
 st.title("📊 Visualisation des Salaires en Data Science")
@@ -132,3 +150,18 @@ if not df.empty:
 
 else:
     st.info("Veuillez charger le fichier de données pour commencer l'analyse.")
+#  Analyse du Top 5 Pays 
+st.subheader("🥇 Top 5 des pays avec les meilleurs salaires")
+# Agrégation par pays
+top_5_pays = df.groupby('company_location')['salary_in_usd'].mean().sort_values(ascending=False).head(5).reset_index()
+fig_top5 = px.bar(top_5_pays, x='company_location', y='salary_in_usd', 
+                  color='salary_in_usd', text_auto='.3s',
+                  title="Top 5 des pays (Moyenne en USD)")
+st.plotly_chart(fig_top5)
+#  Tableau Croisé Expérience vs Télétravail 
+st.subheader("📑 Synthèse : Salaire par Expérience et Mode de Travail")
+# Création de la table pivot identique au notebook
+pivot = df.pivot_table(values='salary_in_usd', index='experience_level', 
+                       columns='remote_ratio', aggfunc='mean').round(0)
+st.table(pivot)
+st.markdown("**Analyse :** Ce tableau montre que les cadres (EX) en télétravail total ont les moyennes les plus hautes.")
