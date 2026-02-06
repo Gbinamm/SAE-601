@@ -23,6 +23,12 @@ def load_data():
 
 df = load_data()
 
+if not df.empty:
+    df['experience_level'] = df['experience_level'].replace({'EN': 'Débutant', 'MI': 'Intermédiaire', 'SE': 'Senior', 'EX': 'Expert'})
+    df['company_size'] = df['company_size'].replace({'S': 'Petite', 'M': 'Moyenne', 'L': 'Grande'})
+    df['employment_type'] = df['employment_type'].replace({'FT': 'Temps plein', 'PT': 'Temps partiel', 'CT': 'Contrat', 'FL': 'Freelance'})
+    df['remote_ratio'] = df['remote_ratio'].replace({0: 'Présentiel', 50: 'Hybride', 100: 'Télétravail'})
+
 # Indicateurs de synthèse 
 if not df.empty:
     st.markdown("### 💰 Chiffres Clés")
@@ -32,7 +38,7 @@ if not df.empty:
         st.metric("💰 Salaire Moyen", f"{round(df['salary_in_usd'].mean(), 0)} $")
     with col_kpi2:
         # Calcul issu du notebook
-        moy_rem = df[df['remote_ratio'] == 100]['salary_in_usd'].mean()
+        moy_rem = df[df['remote_ratio'] == 'Télétravail']['salary_in_usd'].mean()
         st.metric("🏠 Moyenne Télétravail", f"{round(moy_rem, 0)} $")
     with col_kpi3:
         # Vérification des valeurs nulles
@@ -77,7 +83,8 @@ if not df.empty:
     
     fig_bar = px.bar(df_grouped, x=categorie, y='salary_in_usd', 
                      title=f"Salaire moyen par {categorie}",
-                     color='salary_in_usd', color_continuous_scale='Viridis')
+                     color='salary_in_usd', color_continuous_scale='Viridis',
+                     labels={'salary_in_usd': 'Salaire moyen (USD)', 'experience_level': "Niveau d'expérience", 'employment_type': "Type d'emploi", 'job_title': "Métier", 'company_location': "Localisation"})
     st.plotly_chart(fig_bar)
     st.markdown(f"**Interprétation :** Ce graphique permet d'identifier rapidement les facteurs les plus rémunérateurs pour la variable **{categorie}**. On note souvent que les contrats 'Full-Time' et les localisations US dominent le classement.")
 
@@ -101,7 +108,8 @@ if not df.empty:
     df_evolution = df_top10.groupby(['work_year', 'job_title'])['salary_in_usd'].mean().reset_index()
     
     fig_line = px.line(df_evolution, x='work_year', y='salary_in_usd', color='job_title',
-                       title="Évolution annuelle du salaire moyen par métier")
+                       title="Évolution annuelle du salaire moyen par métier",
+                       labels={'work_year': 'Année', 'salary_in_usd': 'Salaire moyen (USD)', 'job_title': 'Métier'})
     st.plotly_chart(fig_line)
     st.markdown("**Interprétation :** On observe globalement une tendance à la hausse, confirmant que la demande en Data Science reste forte d'année en année pour les rôles comme Data Scientist ou Data Engineer.")
 
@@ -110,7 +118,8 @@ if not df.empty:
     df_median = df.groupby(['experience_level', 'company_size'])['salary_in_usd'].median().reset_index()
     
     fig_median = px.bar(df_median, x='experience_level', y='salary_in_usd', color='company_size',
-                        barmode='group', title="Impact de la taille d'entreprise sur le salaire médian")
+                        barmode='group', title="Impact de la taille d'entreprise sur le salaire médian",
+                        labels={'salary_in_usd': 'Salaire médian (USD)', 'experience_level': "Niveau d'expérience", 'company_size': "Taille d'entreprise"})
     st.plotly_chart(fig_median)
     st.markdown("**Interprétation :** En général, les grandes entreprises (L) offrent des salaires plus élevés pour les seniors, mais les PME (S/M) peuvent être compétitives sur les profils juniors pour attirer les talents.")
 
@@ -125,7 +134,8 @@ if not df.empty:
     st.subheader("🏠 Impact du télétravail sur le salaire")
     # On compare les salaires en fonction des ratios de télétravail
     fig_remote = px.strip(df_filtered, x='remote_ratio', y='salary_in_usd', color='experience_level',
-                          title="Répartition des salaires selon le taux de télétravail")
+                          title="Répartition des salaires selon le taux de télétravail",
+                          labels={'remote_ratio': 'Mode de travail', 'salary_in_usd': 'Salaire (USD)', 'experience_level': "Niveau d'expérience"})
     st.plotly_chart(fig_remote)
     st.markdown("**Interprétation :** Le télétravail total (100) n'entraîne pas forcément une baisse de salaire, au contraire, il permet souvent d'accéder à des marchés internationaux mieux rémunérés.")
 
@@ -150,18 +160,21 @@ if not df.empty:
 
 else:
     st.info("Veuillez charger le fichier de données pour commencer l'analyse.")
+
 #  Analyse du Top 5 Pays 
 st.subheader("🥇 Top 5 des pays avec les meilleurs salaires")
 # Agrégation par pays
 top_5_pays = df.groupby('company_location')['salary_in_usd'].mean().sort_values(ascending=False).head(5).reset_index()
 fig_top5 = px.bar(top_5_pays, x='company_location', y='salary_in_usd', 
                   color='salary_in_usd', text_auto='.3s',
-                  title="Top 5 des pays (Moyenne en USD)")
+                  title="Top 5 des pays (Moyenne en USD)",
+                  labels={'salary_in_usd': 'Salaire moyen (USD)', 'company_location': 'Localisation'})
 st.plotly_chart(fig_top5)
+
 #  Tableau Croisé Expérience vs Télétravail 
 st.subheader("📑 Synthèse : Salaire par Expérience et Mode de Travail")
 # Création de la table pivot identique au notebook
 pivot = df.pivot_table(values='salary_in_usd', index='experience_level', 
-                       columns='remote_ratio', aggfunc='mean').round(0)
+                        columns='remote_ratio', aggfunc='mean').round(0)
 st.table(pivot)
-st.markdown("**Analyse :** Ce tableau montre que les cadres (EX) en télétravail total ont les moyennes les plus hautes.")
+st.markdown("**Analyse :** Ce tableau montre que les cadres (Expert) en télétravail total ont les moyennes les plus hautes.")
