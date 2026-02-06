@@ -20,7 +20,7 @@ L'application propose plusieurs niveaux d'analyse :
 
 ---
 
-## 🛠️ Installation et Lancement
+## Installation et Lancement
 
 Si vous souhaitez lancer le projet localement :
 
